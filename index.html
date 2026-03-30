@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>LABYRINTH VR</title>
+<script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --c0:#00f5ff;--c1:#ff3e6c;--c2:#ffd060;
+  --bg:#020810;--panel:rgba(0,10,25,0.92);
+  --border:rgba(0,245,255,0.25);
+  --dim:rgba(180,220,255,0.5);
+  --font:'Orbitron',monospace;--mono:'Share Tech Mono',monospace;
+  --glow:0 0 20px rgba(0,245,255,0.5);
+}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-family:var(--mono);color:#c8e8ff}
+
+/* ─── OVERLAY UI (por encima de A-Frame) ─── */
+#ui{position:fixed;inset:0;z-index:9999;pointer-events:none}
+#ui *{pointer-events:all}
+
+/* ─── PANTALLA DE CARGA 1 ─── */
+#loadScreen{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(ellipse at 30% 60%,rgba(0,60,110,0.4),transparent 60%),var(--bg);
+  z-index:10;
+}
+.scanlines{
+  position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(to bottom,transparent,transparent 3px,rgba(0,0,0,0.1) 3px,rgba(0,0,0,0.1) 6px);
+}
+.load-box{position:relative;z-index:1;width:min(760px,95vw);padding:40px 30px;text-align:center}
+.load-logo{font-family:var(--font);font-size:clamp(2.5rem,6vw,4rem);font-weight:900;color:var(--c0);
+  text-shadow:0 0 40px rgba(0,245,255,0.5),0 0 80px rgba(0,245,255,0.2);letter-spacing:.12em}
+.load-logo span{color:var(--c1);font-size:.55em;vertical-align:super;margin-left:4px}
+.load-sub{font-size:.7rem;letter-spacing:.4em;color:var(--dim);margin-top:6px}
+.divider{width:80px;height:1px;background:linear-gradient(to right,transparent,var(--c0),transparent);margin:22px auto}
+.instr-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:28px}
+.icard{background:rgba(0,245,255,0.04);border:1px solid var(--border);border-radius:6px;padding:18px 14px;text-align:left;
+  animation:fadeUp .5s both}
+.icard:nth-child(1){animation-delay:.15s}.icard:nth-child(2){animation-delay:.3s}
+.icard:nth-child(3){animation-delay:.45s}.icard:nth-child(4){animation-delay:.6s}
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+.icard-icon{font-size:1.6rem;margin-bottom:8px}
+.icard-title{font-family:var(--font);font-size:.6rem;letter-spacing:.2em;color:var(--c0);margin-bottom:5px}
+.icard-desc{font-size:.72rem;color:var(--dim);line-height:1.55}
+.icard-desc strong{color:var(--c2)}
+.progwrap{max-width:380px;margin:0 auto}
+.progbar{height:3px;background:rgba(0,245,255,0.1);border-radius:2px;overflow:hidden;margin-bottom:8px}
+.progfill{height:100%;background:linear-gradient(to right,var(--c0),#00ffaa);width:0%;transition:width .3s;
+  box-shadow:0 0 8px rgba(0,245,255,0.7)}
+.progtxt{font-size:.65rem;color:var(--dim);letter-spacing:.2em}
+@keyframes glitch1{0%,88%{clip:rect(0,0,0,0);transform:none}89%{clip:rect(8px,9999px,22px,0);transform:translateX(-4px)}90%{clip:rect(0,0,0,0)}}
+@keyframes glitch2{0%,85%{clip:rect(0,0,0,0);transform:none}86%{clip:rect(50px,9999px,70px,0);transform:translateX(3px)}87%{clip:rect(0,0,0,0)}}
+
+/* ─── PANTALLA GAFAS VR ─── */
+#vrScreen{
+  position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  background:radial-gradient(ellipse at 70% 40%,rgba(0,40,80,0.4),transparent 60%),var(--bg);
+}
+.vr-icon{font-size:5rem;animation:vrpulse 2s ease-in-out infinite}
+@keyframes vrpulse{0%,100%{transform:scale(1);filter:drop-shadow(0 0 10px rgba(0,245,255,0.3))}50%{transform:scale(1.1);filter:drop-shadow(0 0 30px rgba(0,245,255,0.7))}}
+.vr-ring{width:70px;height:70px;border:2px solid var(--c0);border-radius:50%;animation:ringex 2s ease-out infinite}
+@keyframes ringex{0%{transform:scale(.5);opacity:.8}100%{transform:scale(2.2);opacity:0}}
+.vr-hint{font-size:.85rem;color:var(--dim);line-height:2;text-align:center;max-width:360px}
+.vr-hint strong{color:var(--c0);font-size:1.1em}
+.btn-skip{background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--dim);
+  font-family:var(--mono);font-size:.75rem;padding:8px 22px;cursor:pointer;transition:all .25s;letter-spacing:.1em}
+.btn-skip:hover{border-color:var(--c0);color:var(--c0)}
+
+/* ─── MENÚ PRINCIPAL (overlay sobre escena 3D) ─── */
+#menuScreen{
+  position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+  background:rgba(2,8,16,0.35);backdrop-filter:blur(2px);
+}
+.menu-panel{
+  background:var(--panel);border:1px solid var(--border);border-radius:8px;
+  padding:32px 28px;width:min(460px,92vw);
+  box-shadow:0 0 60px rgba(0,245,255,0.08);
+}
+.m-logo{font-family:var(--font);font-size:clamp(1.6rem,4vw,2.5rem);font-weight:900;color:var(--c0);
+  text-shadow:var(--glow);letter-spacing:.12em;text-align:center;position:relative}
+.m-logo::before,.m-logo::after{content:'LABYRINTH';position:absolute;left:0;width:100%}
+.m-logo::before{color:var(--c1);animation:glitch1 5s infinite;opacity:.6}
+.m-logo::after{color:#00ff88;animation:glitch2 5s .5s infinite;opacity:.4}
+.m-sub{font-size:.6rem;letter-spacing:.35em;color:var(--dim);text-align:center;margin:4px 0 6px}
+.m-line{width:50px;height:1px;background:linear-gradient(to right,transparent,var(--c0),transparent);margin:0 auto 20px}
+
+/* Volume */
+.vol-row{display:flex;align-items:center;gap:10px;margin-bottom:18px;
+  background:rgba(0,245,255,0.03);border:1px solid rgba(0,245,255,0.1);border-radius:6px;padding:10px 14px}
+.vol-row svg{width:16px;height:16px;color:var(--c0);flex-shrink:0}
+.vol-slider{flex:1;-webkit-appearance:none;height:3px;background:rgba(0,245,255,0.15);border-radius:2px;outline:none;cursor:pointer}
+.vol-slider::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--c0);box-shadow:var(--glow)}
+.vol-num{font-size:.65rem;color:var(--c0);min-width:26px;text-align:right}
+
+/* Name */
+.name-row{margin-bottom:18px}
+.flabel{display:block;font-size:.58rem;letter-spacing:.22em;color:var(--dim);margin-bottom:7px}
+.name-wrap{display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);padding-bottom:6px}
+.name-input{flex:1;background:transparent;border:none;color:var(--c0);font-family:var(--font);font-size:.9rem;
+  letter-spacing:.18em;outline:none;text-transform:uppercase}
+.name-input::placeholder{color:rgba(0,245,255,0.2)}
+.name-cnt{font-size:.6rem;color:var(--dim)}
+
+/* Buttons */
+.btn-menu{
+  width:100%;display:flex;align-items:center;gap:14px;padding:13px 18px;margin-bottom:9px;
+  background:rgba(0,245,255,0.03);border:1px solid var(--border);border-radius:6px;
+  color:#c8e8ff;font-family:var(--font);font-size:.78rem;letter-spacing:.18em;cursor:pointer;
+  position:relative;overflow:hidden;transition:all .22s;
+}
+.btn-menu:hover{border-color:var(--c0);color:var(--c0);box-shadow:var(--glow);transform:translateX(4px)}
+.btn-menu .bicon{width:22px;text-align:center;font-size:.9rem}
+.btn-menu .bglow{
+  position:absolute;left:-100%;top:0;width:60%;height:100%;
+  background:linear-gradient(90deg,transparent,rgba(0,245,255,0.07),transparent);
+  transition:left .5s;
+}
+.btn-menu:hover .bglow{left:150%}
+
+/* Sub-screens */
+.sub-screen{display:none;flex-direction:column;gap:12px}
+.sub-screen.active{display:flex}
+.stitle{font-family:var(--font);font-size:.8rem;letter-spacing:.28em;color:var(--c0);text-align:center;margin-bottom:4px}
+.finput{width:100%;background:rgba(0,10,20,0.6);border:1px solid var(--border);border-radius:6px;
+  color:var(--c0);font-family:var(--mono);font-size:.88rem;padding:10px 14px;outline:none;transition:all .22s}
+.finput:focus{border-color:var(--c0);box-shadow:var(--glow)}
+.finput::placeholder{color:rgba(0,245,255,0.2)}
+.code-input{text-align:center;font-family:var(--font);font-size:1.4rem;letter-spacing:.5em;text-transform:uppercase}
+.toggle-row{display:flex;gap:8px}
+.tbtn{flex:1;padding:10px;background:transparent;border:1px solid var(--border);border-radius:6px;
+  color:var(--dim);font-family:var(--mono);font-size:.72rem;cursor:pointer;transition:all .22s;letter-spacing:.08em}
+.tbtn.active{background:rgba(0,245,255,0.1);border-color:var(--c0);color:var(--c0);box-shadow:var(--glow)}
+.info-box{background:rgba(0,245,255,0.03);border:1px solid rgba(0,245,255,0.12);border-left:3px solid var(--c0);
+  border-radius:6px;padding:12px 14px;font-size:.72rem;line-height:1.8}
+.info-box strong{color:var(--c2)}
+.btn-action{width:100%;padding:12px 20px;background:linear-gradient(135deg,rgba(0,245,255,0.12),rgba(0,245,255,0.04));
+  border:1px solid var(--c0);border-radius:6px;color:var(--c0);font-family:var(--font);font-size:.75rem;
+  letter-spacing:.2em;cursor:pointer;transition:all .22s;box-shadow:var(--glow)}
+.btn-action:hover{background:rgba(0,245,255,0.18);box-shadow:0 0 30px rgba(0,245,255,0.5);transform:translateY(-1px)}
+.btn-back{background:transparent;border:none;color:var(--dim);font-family:var(--mono);font-size:.72rem;
+  letter-spacing:.1em;cursor:pointer;transition:color .2s;padding:4px;text-align:left}
+.btn-back:hover{color:var(--c0)}
+.num-row{display:flex;align-items:center;gap:18px}
+.nbtn{width:34px;height:34px;background:transparent;border:1px solid var(--border);border-radius:50%;
+  color:var(--c0);font-size:1.1rem;cursor:pointer;transition:all .22s}
+.nbtn:hover{border-color:var(--c0);box-shadow:var(--glow)}
+#maxP{font-family:var(--font);font-size:1.4rem;color:var(--c0);min-width:28px;text-align:center}
+.codebox{background:rgba(0,245,255,0.04);border:1px solid var(--c0);border-radius:6px;padding:14px;
+  text-align:center;font-family:var(--font);font-size:1.5rem;letter-spacing:.4em;color:var(--c2);
+  text-shadow:0 0 20px rgba(255,208,96,0.5)}
+
+/* ─── HUD EN JUEGO ─── */
+#hud{position:absolute;inset:0;display:none;pointer-events:none}
+.hud-top{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;padding:12px 18px;
+  background:linear-gradient(to bottom,rgba(0,5,15,0.85),transparent);pointer-events:all}
+.hud-name{font-family:var(--font);font-size:.72rem;color:var(--c0);letter-spacing:.18em;text-shadow:var(--glow)}
+.hud-status{flex:1;text-align:center;font-size:.68rem;color:var(--dim);letter-spacing:.14em}
+.hud-pc{font-size:.62rem;color:var(--dim)}
+.btn-pause{position:absolute;top:10px;right:14px;background:rgba(0,10,20,0.7);border:1px solid var(--border);
+  border-radius:6px;color:var(--c0);font-size:.9rem;padding:6px 12px;cursor:pointer;
+  pointer-events:all;transition:all .22s}
+.btn-pause:hover{border-color:var(--c0);box-shadow:var(--glow)}
+
+/* WASD helper */
+.wasd-hint{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);
+  font-size:.62rem;color:rgba(180,220,255,0.3);letter-spacing:.18em;white-space:nowrap;text-align:center}
+
+/* ─── PAUSA ─── */
+#pauseScreen{
+  position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+  background:rgba(2,8,16,0.8);backdrop-filter:blur(8px);
+}
+.pause-panel{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:36px 44px;
+  display:flex;flex-direction:column;align-items:center;gap:14px;min-width:280px}
+.pause-title{font-family:var(--font);font-size:1.4rem;letter-spacing:.3em;color:var(--c0);text-shadow:var(--glow);margin-bottom:8px}
+.pbtn{width:100%;padding:12px 20px;background:rgba(0,245,255,0.05);border:1px solid var(--border);border-radius:6px;
+  color:#c8e8ff;font-family:var(--mono);font-size:.78rem;letter-spacing:.14em;cursor:pointer;transition:all .22s}
+.pbtn:hover{background:rgba(0,245,255,0.12);border-color:var(--c0);color:var(--c0);box-shadow:var(--glow)}
+
+/* ─── VICTORIA ─── */
+#winScreen{
+  position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+  background:rgba(2,8,16,0.85);backdrop-filter:blur(8px);
+}
+.win-box{display:flex;flex-direction:column;align-items:center;gap:12px;padding:40px}
+.win-trophy{font-size:5rem;animation:trophyIn 1s cubic-bezier(.175,.885,.32,1.275) both}
+@keyframes trophyIn{from{transform:scale(0) rotate(-180deg)}to{transform:scale(1) rotate(0)}}
+.win-title{font-family:var(--font);font-size:2.4rem;font-weight:900;color:var(--c2);
+  text-shadow:0 0 40px rgba(255,208,96,0.7);animation:winglow 1.5s ease-in-out infinite alternate}
+@keyframes winglow{from{text-shadow:0 0 20px rgba(255,208,96,0.4)}to{text-shadow:0 0 60px rgba(255,208,96,0.9)}}
+.win-pname{font-family:var(--font);font-size:1.1rem;color:var(--c0);letter-spacing:.2em}
+.win-sub{font-size:.8rem;color:var(--dim)}
+
+/* ─── TOAST ─── */
+#toast{
+  position:absolute;bottom:28px;left:50%;transform:translateX(-50%);
+  background:rgba(0,10,22,0.95);border:1px solid var(--c0);border-radius:6px;
+  color:var(--c0);font-family:var(--mono);font-size:.78rem;padding:10px 24px;
+  opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;box-shadow:var(--glow);z-index:20
+}
+#toast.show{opacity:1}
+.fade-out{opacity:0!important;transition:opacity .6s!important}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════
+     A-FRAME SCENE — siempre presente, se activa al jugar
+════════════════════════════════════════════════ -->
+<a-scene
+  id="scene"
+  background="color:#020810"
+  fog="type:exponential;color:#020810;density:0.035"
+  renderer="antialias:true;colorManagement:true;physicallyCorrectLights:true"
+  vr-mode-ui="enabled:true"
+  loading-screen="enabled:false"
+>
+  <!-- ASSETS -->
+  <a-assets timeout="3000"></a-assets>
+
+  <!-- ILUMINACIÓN AMBIENTAL -->
+  <a-entity light="type:ambient;color:#08182e;intensity:1.2"></a-entity>
+  <a-entity light="type:directional;color:#006080;intensity:0.5;castShadow:true" position="3 8 3"></a-entity>
+
+  <!-- MENÚ 3D — escena panorámica giratoria como fondo -->
+  <a-entity id="menuScene3D">
+    <!-- Suelo brillante del menú -->
+    <a-plane
+      rotation="-90 0 0" position="0 0 0"
+      width="200" height="200"
+      material="color:#010d1a;roughness:0.05;metalness:0.8;emissive:#001830;emissiveIntensity:0.3"
+    ></a-plane>
+    <!-- Laberinto decorativo de fondo (generado por JS) -->
+    <a-entity id="demoMaze"></a-entity>
+    <!-- Luz de ambiente del menú -->
+    <a-entity light="type:point;color:#00f5ff;intensity:0.6;distance:30" position="0 5 -8"></a-entity>
+    <a-entity light="type:point;color:#ff3e6c;intensity:0.4;distance:25" position="-10 4 5"></a-entity>
+    <a-entity light="type:point;color:#ffd060;intensity:0.3;distance:20" position="10 3 -15"></a-entity>
+  </a-entity>
+
+  <!-- CÁMARA DEL MENÚ — rota lentamente para efecto panorámico -->
+  <a-entity id="menuCam" position="0 8 12">
+    <a-camera
+      id="menuCamera"
+      look-controls="enabled:false"
+      wasd-controls="enabled:false"
+      fov="70"
+    ></a-camera>
+  </a-entity>
+
+  <!-- ══ JUEGO: escena del laberinto (oculta hasta jugar) ══ -->
+  <a-entity id="gameScene" visible="false">
+
+    <a-entity id="gameFloor"></a-entity>
+    <a-entity id="gameWalls"></a-entity>
+    <a-entity id="gameCeiling"></a-entity>
+    <a-entity id="otherPlayers"></a-entity>
+
+    <!-- OBJETO COLECCIONABLE -->
+    <a-entity id="prize" visible="false">
+      <a-entity
+        geometry="primitive:dodecahedron;radius:0.28"
+        material="color:#ffd060;emissive:#ffd060;emissiveIntensity:0.9;metalness:0.95;roughness:0.05"
+        animation="property:rotation;to:0 360 0;loop:true;dur:2800;easing:linear"
+      ></a-entity>
+      <a-entity
+        geometry="primitive:sphere;radius:0.55"
+        material="color:#ffd060;opacity:0.12;transparent:true;side:double"
+        animation="property:scale;from:1 1 1;to:1.5 1.5 1.5;loop:true;dir:alternate;dur:1400"
+      ></a-entity>
+      <a-entity light="type:point;color:#ffd060;intensity:2;distance:8"></a-entity>
+    </a-entity>
+
+    <!-- JUGADOR LOCAL -->
+    <a-entity id="rig" position="3 0 3">
+      <a-camera
+        id="cam"
+        look-controls="pointerLockEnabled:false"
+        wasd-controls="enabled:false"
+        position="0 1.65 0"
+        near="0.08" far="80"
+      >
+        <a-cursor color="#00f5ff" opacity="0.7" raycaster="objects:.grab"></a-cursor>
+      </a-camera>
+    </a-entity>
+
+  </a-entity><!-- /gameScene -->
+
+</a-scene>
+
+<!-- ═══════════════════════════════════════════════
+     OVERLAY UI
+════════════════════════════════════════════════ -->
+<div id="ui">
+
+  <!-- ─── PANTALLA CARGA 1: INSTRUCCIONES ─── -->
+  <div id="loadScreen">
+    <div class="scanlines"></div>
+    <div class="load-box">
+      <div class="load-logo">LABYRINTH<span>VR</span></div>
+      <div class="load-sub">MULTIPLAYER MAZE EXPERIENCE</div>
+      <div class="divider"></div>
+      <div class="instr-grid">
+        <div class="icard">
+          <div class="icard-icon">👁️</div>
+          <div class="icard-title">MOVER CÁMARA</div>
+          <div class="icard-desc">En VR mueve tu cabeza. En PC arrastra con el ratón o usa el tacto.</div>
+        </div>
+        <div class="icard">
+          <div class="icard-icon">🕹️</div>
+          <div class="icard-title">MOVERSE</div>
+          <div class="icard-desc">Usa <strong>WASD</strong> o las flechas del teclado. En VR el joystick izquierdo.</div>
+        </div>
+        <div class="icard">
+          <div class="icard-icon">⭐</div>
+          <div class="icard-title">OBJETIVO</div>
+          <div class="icard-desc">Hay <strong>1 objeto dorado</strong> escondido en el laberinto. ¡Sé el primero en encontrarlo!</div>
+        </div>
+        <div class="icard">
+          <div class="icard-icon">🏆</div>
+          <div class="icard-title">GANAR</div>
+          <div class="icard-desc">Acércate al objeto antes que los demás. El ganador recibe la pantalla de victoria.</div>
+        </div>
+      </div>
+      <div class="progwrap">
+        <div class="progbar"><div class="progfill" id="pFill"></div></div>
+        <div class="progtxt" id="pTxt">Inicializando...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── PANTALLA CARGA 2: PONTE LAS GAFAS ─── -->
+  <div id="vrScreen">
+    <div class="scanlines"></div>
+    <div class="vr-icon">🥽</div>
+    <div style="font-family:var(--font);font-size:1.8rem;font-weight:900;color:var(--c0);text-shadow:var(--glow);letter-spacing:.12em">PONTE LAS GAFAS</div>
+    <div style="font-size:.65rem;letter-spacing:.35em;color:var(--dim)">REALIDAD VIRTUAL</div>
+    <div class="divider"></div>
+    <p class="vr-hint">Colócate las gafas de realidad virtual ahora.<br>El juego comienza en <strong id="vrCD">5</strong> segundos.</p>
+    <div class="vr-ring"></div>
+    <div class="progwrap" style="margin-top:10px">
+      <div class="progbar"><div class="progfill" id="vrFill"></div></div>
+    </div>
+    <button class="btn-skip" onclick="skipVR()">Omitir →</button>
+  </div>
+
+  <!-- ─── MENÚ PRINCIPAL ─── -->
+  <div id="menuScreen">
+    <div class="menu-panel">
+
+      <!-- Logo -->
+      <div class="m-logo">LABYRINTH</div>
+      <div class="m-sub">VR MULTIPLAYER MAZE</div>
+      <div class="m-line"></div>
+
+      <!-- VOLUMEN -->
+      <div class="vol-row">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+          <path id="vw1" d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+          <path id="vw2" d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+        </svg>
+        <input type="range" class="vol-slider" id="volSlider" min="0" max="100" value="60"
+          oninput="updateVol(this)"/>
+        <span class="vol-num" id="volNum">60</span>
+      </div>
+
+      <!-- NOMBRE -->
+      <div class="name-row">
+        <label class="flabel">NOMBRE DEL JUGADOR</label>
+        <div class="name-wrap">
+          <input class="name-input" id="nameIn" type="text" maxlength="10"
+            placeholder="JUGADOR01"
+            oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9_]/g,'');document.getElementById('nameCnt').textContent=this.value.length"/>
+          <span class="name-cnt"><span id="nameCnt">0</span>/10</span>
+        </div>
+      </div>
+
+      <!-- PANTALLAS DE SUB-MENÚ -->
+
+      <!-- MAIN -->
+      <div class="sub-screen active" id="sMain">
+        <button class="btn-menu" onclick="goSub('sPlay')">
+          <span class="bicon">▶</span>JUGAR<span class="bglow"></span>
+        </button>
+        <button class="btn-menu" onclick="goSub('sSettings')">
+          <span class="bicon">⚙</span>AJUSTES<span class="bglow"></span>
+        </button>
+      </div>
+
+      <!-- PLAY -->
+      <div class="sub-screen" id="sPlay">
+        <div class="stitle">MODO DE JUEGO</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">
+          <button class="pbtn" style="background:rgba(0,245,255,0.04);border:1px solid var(--border);border-radius:6px;color:#c8e8ff;font-family:var(--mono);font-size:.68rem;cursor:pointer;padding:14px 10px;text-align:center;transition:all .22s"
+            onmouseover="this.style.borderColor='var(--c0)'" onmouseout="this.style.borderColor='var(--border)'"
+            onclick="goSub('sHost')">🖥️<br><b style="font-family:var(--font);font-size:.6rem;letter-spacing:.12em;color:var(--c0);display:block;margin:6px 0 4px">CREAR</b><span style="font-size:.62rem;color:var(--dim)">Hostea tu sala</span></button>
+          <button class="pbtn" style="background:rgba(0,245,255,0.04);border:1px solid var(--border);border-radius:6px;color:#c8e8ff;font-family:var(--mono);font-size:.68rem;cursor:pointer;padding:14px 10px;text-align:center;transition:all .22s"
+            onmouseover="this.style.borderColor='var(--c0)'" onmouseout="this.style.borderColor='var(--border)'"
+            onclick="goSub('sCode')">🔑<br><b style="font-family:var(--font);font-size:.6rem;letter-spacing:.12em;color:var(--c0);display:block;margin:6px 0 4px">CÓDIGO</b><span style="font-size:.62rem;color:var(--dim)">Sala privada</span></button>
+          <button class="pbtn" style="background:rgba(0,245,255,0.04);border:1px solid var(--border);border-radius:6px;color:#c8e8ff;font-family:var(--mono);font-size:.68rem;cursor:pointer;padding:14px 10px;text-align:center;transition:all .22s"
+            onmouseover="this.style.borderColor='var(--c0)'" onmouseout="this.style.borderColor='var(--border)'"
+            onclick="goSub('sIP')">🌐<br><b style="font-family:var(--font);font-size:.6rem;letter-spacing:.12em;color:var(--c0);display:block;margin:6px 0 4px">POR IP</b><span style="font-size:.62rem;color:var(--dim)">Red local</span></button>
+          <button class="pbtn" style="background:rgba(0,245,255,0.04);border:1px solid var(--border);border-radius:6px;color:#c8e8ff;font-family:var(--mono);font-size:.68rem;cursor:pointer;padding:14px 10px;text-align:center;transition:all .22s"
+            onmouseover="this.style.borderColor='var(--c0)'" onmouseout="this.style.borderColor='var(--border)'"
+            onclick="startSolo()">🎮<br><b style="font-family:var(--font);font-size:.6rem;letter-spacing:.12em;color:var(--c0);display:block;margin:6px 0 4px">SOLO</b><span style="font-size:.62rem;color:var(--dim)">Sin servidor</span></button>
+        </div>
+        <button class="btn-back" onclick="goSub('sMain')">← VOLVER</button>
+      </div>
+
+      <!-- HOST -->
+      <div class="sub-screen" id="sHost">
+        <div class="stitle">CREAR SALA</div>
+        <div>
+          <label class="flabel">NOMBRE DE LA SALA</label>
+          <input class="finput" id="roomName" placeholder="Mi Laberinto" maxlength="20"/>
+        </div>
+        <div>
+          <label class="flabel">TIPO</label>
+          <div class="toggle-row">
+            <button class="tbtn active" id="tPub" onclick="setRoomType('public')">🔓 PÚBLICA</button>
+            <button class="tbtn" id="tPriv" onclick="setRoomType('private')">🔒 PRIVADA</button>
+          </div>
+        </div>
+        <div id="passGroup" class="hidden">
+          <label class="flabel">CONTRASEÑA</label>
+          <input class="finput" id="roomPass" type="password" placeholder="••••••••" maxlength="16"/>
+        </div>
+        <div>
+          <label class="flabel">MÁXIMO JUGADORES</label>
+          <div class="num-row">
+            <button class="nbtn" onclick="adjP(-1)">−</button>
+            <span id="maxP">4</span>
+            <button class="nbtn" onclick="adjP(1)">+</button>
+          </div>
+        </div>
+        <div id="hostInfo" class="hidden">
+          <div class="codebox" id="codeBox">------</div>
+          <div class="info-box" style="margin-top:8px">
+            🌐 IP local: <strong id="localIPBox">—</strong><br>
+            📡 Puerto: <strong>3000</strong><br>
+            <span style="font-size:.65rem;color:var(--dim)">Comparte el código o la IP con tus amigos</span>
+          </div>
+        </div>
+        <button class="btn-action" onclick="createRoom()">CREAR Y JUGAR</button>
+        <button class="btn-back" onclick="goSub('sPlay')">← VOLVER</button>
+      </div>
+
+      <!-- CÓDIGO -->
+      <div class="sub-screen" id="sCode">
+        <div class="stitle">UNIRSE POR CÓDIGO</div>
+        <div>
+          <label class="flabel">CÓDIGO DE 6 CARACTERES</label>
+          <input class="finput code-input" id="joinCode" maxlength="6" placeholder="ABC123"/>
+        </div>
+        <div>
+          <label class="flabel">CONTRASEÑA (si aplica)</label>
+          <input class="finput" id="joinCodePass" type="password" placeholder="Dejar vacío si es pública"/>
+        </div>
+        <button class="btn-action" onclick="joinByCode()">UNIRSE</button>
+        <button class="btn-back" onclick="goSub('sPlay')">← VOLVER</button>
+      </div>
+
+      <!-- IP -->
+      <div class="sub-screen" id="sIP">
+        <div class="stitle">UNIRSE POR IP</div>
+        <div class="info-box">
+          💡 Pide la <strong>IP local</strong> al host (aparece en su pantalla).<br>
+          Misma red WiFi → normalmente <strong>192.168.X.X</strong>
+        </div>
+        <div>
+          <label class="flabel">DIRECCIÓN IP</label>
+          <input class="finput" id="joinIP" placeholder="192.168.1.100"/>
+        </div>
+        <div>
+          <label class="flabel">PUERTO</label>
+          <input class="finput" id="joinPort" value="3000" placeholder="3000"/>
+        </div>
+        <button class="btn-action" onclick="joinByIP()">CONECTAR</button>
+        <button class="btn-back" onclick="goSub('sPlay')">← VOLVER</button>
+      </div>
+
+      <!-- SETTINGS -->
+      <div class="sub-screen" id="sSettings">
+        <div class="stitle">AJUSTES</div>
+        <div>
+          <label class="flabel">MÚSICA</label>
+          <input type="range" class="vol-slider" style="width:100%" min="0" max="100" value="60"
+            oninput="updateSlider(this)"/>
+        </div>
+        <div>
+          <label class="flabel">EFECTOS</label>
+          <input type="range" class="vol-slider" style="width:100%" min="0" max="100" value="80"
+            oninput="updateSlider(this)"/>
+        </div>
+        <div>
+          <label class="flabel">LABERINTO</label>
+          <div class="toggle-row">
+            <button class="tbtn" onclick="setMazeSize('small',this)">11×11</button>
+            <button class="tbtn active" onclick="setMazeSize('medium',this)">15×15</button>
+            <button class="tbtn" onclick="setMazeSize('large',this)">21×21</button>
+          </div>
+        </div>
+        <button class="btn-back" onclick="goSub('sMain')">← VOLVER</button>
+      </div>
+
+    </div><!-- /menu-panel -->
+  </div>
+
+  <!-- ─── HUD ─── -->
+  <div id="hud">
+    <div class="hud-top">
+      <span class="hud-name" id="hudName">JUGADOR01</span>
+      <span class="hud-status" id="hudStatus">🔍 Busca el objeto dorado...</span>
+      <span class="hud-pc" id="hudPC">👥 1</span>
+    </div>
+    <button class="btn-pause" onclick="togglePause()">☰</button>
+    <div class="wasd-hint">WASD / FLECHAS para moverse</div>
+  </div>
+
+  <!-- ─── PAUSA ─── -->
+  <div id="pauseScreen">
+    <div class="pause-panel">
+      <div class="pause-title">PAUSA</div>
+      <button class="pbtn" onclick="togglePause()">▶ CONTINUAR</button>
+      <button class="pbtn" onclick="backToMenu()">⟵ MENÚ</button>
+    </div>
+  </div>
+
+  <!-- ─── VICTORIA ─── -->
+  <div id="winScreen">
+    <div class="win-box">
+      <div class="win-trophy">🏆</div>
+      <div class="win-title">¡GANASTE!</div>
+      <div class="win-pname" id="winName"></div>
+      <div class="win-sub">Encontraste el objeto primero</div>
+      <button class="pbtn" style="margin-top:16px;width:220px" onclick="backToMenu()">VOLVER AL MENÚ</button>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div id="toast"></div>
+
+</div><!-- /ui -->
+
+<script>
+// ══════════════════════════════════════════════════
+//  LABYRINTH VR — Engine completo
+// ══════════════════════════════════════════════════
+
+// ── CONFIG ──
+const CFG = {
+  mazeCols: 15, mazeRows: 15,
+  cellSize: 3.2,
+  wallH: 2.9, wallT: 0.22,
+  spawnC: 1, spawnR: 1,
+  playerSpeed: 4.2,
+  playerR: 0.32,
+  prizeR: 1.8,
+};
+
+// ── ESTADO ──
+let STATE = 'loading'; // loading | vr | menu | game | pause | win
+let maze = [], prizeCell = null, walls3D = [];
+let playerPos = { x: CFG.cellSize, z: CFG.cellSize };
+let playerName = 'JUGADOR01';
+let maxPlayers = 4, roomType = 'public', mazeSize = 'medium';
+let gameStarted = false, won = false;
+let lastT = 0;
+const KEYS = {};
+let ws = null;
+let menuRotAngle = 0;
+
+// ── UTILS ──
+const $ = id => document.getElementById(id);
+let toastT;
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function showOnly(id) {
+  ['loadScreen','vrScreen','menuScreen','hud','pauseScreen','winScreen']
+    .forEach(s => { const el = $(s); if(el) { el.style.display='none'; el.style.opacity=''; }});
+  const el = $(id);
+  if (el) { el.style.display = ['hud'].includes(id) ? 'block' : 'flex'; }
+}
+
+// ── NAVEGACIÓN SUB-SCREENS ──
+function goSub(id) {
+  document.querySelectorAll('.sub-screen').forEach(s => s.classList.remove('active'));
+  $(id)?.classList.add('active');
+}
+
+// ── VOLUMEN ──
+function updateVol(el) {
+  const v = el.value;
+  $('volNum').textContent = v;
+  el.style.background = `linear-gradient(to right,var(--c0) ${v}%,rgba(0,245,255,0.15) ${v}%)`;
+}
+function updateSlider(el) {
+  el.style.background = `linear-gradient(to right,var(--c0) ${el.value}%,rgba(0,245,255,0.15) ${el.value}%)`;
+}
+updateVol($('volSlider'));
+
+// ── ROOM TYPE / AJUSTES ──
+function setRoomType(t) {
+  roomType = t;
+  $('tPub').classList.toggle('active', t==='public');
+  $('tPriv').classList.toggle('active', t==='private');
+  $('passGroup').classList.toggle('hidden', t!=='private');
+}
+function adjP(d) {
+  maxPlayers = Math.min(8, Math.max(2, maxPlayers + d));
+  $('maxP').textContent = maxPlayers;
+}
+function setMazeSize(s, btn) {
+  mazeSize = s;
+  document.querySelectorAll('#sSettings .tbtn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const map = { small:[11,11], medium:[15,15], large:[21,21] };
+  [CFG.mazeCols, CFG.mazeRows] = map[s];
+}
+
+// ══════════════════════════════════════════════════
+//  GENERADOR DE LABERINTO (DFS)
+// ══════════════════════════════════════════════════
+function genMaze(cols, rows) {
+  const cells = Array.from({length: rows*cols}, (_,i) => ({
+    r: Math.floor(i/cols), c: i%cols,
+    visited: false, walls: [true,true,true,true] // N E S W
+  }));
+  const gc = (r,c) => (r<0||r>=rows||c<0||c>=cols) ? null : cells[r*cols+c];
+  const shuffle = a => { for(let i=a.length-1;i>0;i--){const j=Math.random()*i|0;[a[i],a[j]]=[a[j],a[i]]}; return a; };
+
+  function carve(r,c) {
+    gc(r,c).visited = true;
+    for (const {dr,dc,w0,w1} of shuffle([
+      {dr:-2,dc:0,w0:0,w1:2},{dr:0,dc:2,w0:1,w1:3},
+      {dr:2,dc:0,w0:2,w1:0},{dr:0,dc:-2,w0:3,w1:1}
+    ])) {
+      const n = gc(r+dr, c+dc);
+      if (n && !n.visited) {
+        gc(r,c).walls[w0] = false;
+        n.walls[w1] = false;
+        const mid = gc(r+dr/2, c+dc/2);
+        if (mid) { mid.visited=true; mid.walls[w0]=false; mid.walls[w1]=false; }
+        carve(r+dr, c+dc);
+      }
+    }
+  }
+  carve(1,1);
+  return cells;
+}
+
+// ══════════════════════════════════════════════════
+//  CONSTRUIR ESCENA A-FRAME DEL JUEGO
+// ══════════════════════════════════════════════════
+function buildGameScene() {
+  const W = $('gameWalls'), F = $('gameFloor'), C = $('gameCeiling');
+  W.innerHTML = F.innerHTML = C.innerHTML = '';
+  walls3D = [];
+
+  const { cellSize:CS, wallH:WH, wallT:WT, mazeCols:COLS, mazeRows:ROWS } = CFG;
+  const TW = COLS * CS, TD = ROWS * CS;
+
+  // Suelo
+  const floor = mk('a-plane', {
+    rotation:'-90 0 0', position:`${TW/2} 0 ${TD/2}`,
+    width: TW+CS*2, height: TD+CS*2,
+    material:'color:#03090f;roughness:0.9;metalness:0.1;emissive:#001015;emissiveIntensity:0.4'
+  });
+  F.appendChild(floor);
+
+  // Techo
+  const ceil = mk('a-plane', {
+    rotation:'90 0 0', position:`${TW/2} ${WH} ${TD/2}`,
+    width: TW+CS*2, height: TD+CS*2,
+    material:'color:#010507;roughness:1'
+  });
+  C.appendChild(ceil);
+
+  // Luces dentro del laberinto (en corredores)
+  for (let r=1; r<ROWS; r+=4) {
+    for (let c=1; c<COLS; c+=4) {
+      const lx = c*CS + CS/2, lz = r*CS + CS/2;
+      addLight(W, lx, WH*0.85, lz, '#003850', 0.5, CS*5);
+    }
+  }
+
+  // Paredes
+  for (const cell of maze) {
+    const bx = cell.c * CS, bz = cell.r * CS;
+    if (cell.walls[0]) spawnWall(W, bx+CS/2, bz,      CS, WT); // N
+    if (cell.walls[1]) spawnWall(W, bx+CS,   bz+CS/2, WT, CS); // E
+    if (!cell.walls[0] && cell.r===0) spawnWall(W, bx+CS/2, bz, CS, WT);
+  }
+  // Bordes exteriores
+  spawnWall(W, TW/2, -WT/2, TW+WT*2, WT);
+  spawnWall(W, TW/2, TD+WT/2, TW+WT*2, WT);
+  spawnWall(W, -WT/2, TD/2, WT, TD);
+  spawnWall(W, TW+WT/2, TD/2, WT, TD+WT*2);
+}
+
+function spawnWall(container, cx, cz, width, depth) {
+  const { wallH:WH } = CFG;
+  const e = mk('a-box', {
+    position:`${cx} ${WH/2} ${cz}`,
+    width, height: WH, depth,
+    material:'color:#061220;emissive:#002035;emissiveIntensity:0.5;roughness:0.8;metalness:0.15'
+  });
+  container.appendChild(e);
+  const hw = width/2 + 0.25, hd = depth/2 + 0.25;
+  walls3D.push({ minX:cx-hw, maxX:cx+hw, minZ:cz-hd, maxZ:cz+hd });
+}
+
+function addLight(container, x, y, z, color, intensity, dist) {
+  const e = mk('a-entity', { light:`type:point;color:${color};intensity:${intensity};distance:${dist}`, position:`${x} ${y} ${z}` });
+  container.appendChild(e);
+}
+
+function mk(tag, attrs) {
+  const e = document.createElement(tag);
+  Object.entries(attrs).forEach(([k,v]) => e.setAttribute(k, v));
+  return e;
+}
+
+function placePrize() {
+  let best = null, bestD = 0;
+  for (const c of maze) {
+    if (!c.visited) continue;
+    const d = Math.abs(c.r - CFG.spawnR) + Math.abs(c.c - CFG.spawnC);
+    if (d > bestD) { bestD = d; best = c; }
+  }
+  prizeCell = best || maze[maze.length-2];
+  const px = prizeCell.c * CFG.cellSize + CFG.cellSize/2;
+  const pz = prizeCell.r * CFG.cellSize + CFG.cellSize/2;
+  const prize = $('prize');
+  prize.setAttribute('position', `${px} 1.3 ${pz}`);
+  prize.setAttribute('visible', 'true');
+}
+
+// ══════════════════════════════════════════════════
+//  LABERINTO DECORATIVO DEL MENÚ (demo 3D)
+// ══════════════════════════════════════════════════
+function buildMenuMaze() {
+  const container = $('demoMaze');
+  container.innerHTML = '';
+  const COLS=13, ROWS=13, CS=3.5, WH=2.5, WT=0.2;
+
+  // Suelo espejado
+  container.appendChild(mk('a-plane',{
+    rotation:'-90 0 0', position:`${COLS*CS/2} 0 ${-ROWS*CS/2}`,
+    width:COLS*CS+10, height:ROWS*CS+10,
+    material:'color:#010d1a;roughness:0.05;metalness:0.9;emissive:#001830;emissiveIntensity:0.3'
+  }));
+
+  // Paredes del demo con líneas de neón
+  const dMaze = genMaze(COLS, ROWS);
+  for (const cell of dMaze) {
+    const bx = cell.c*CS - COLS*CS/2, bz = -(cell.r*CS);
+    if (cell.walls[0]) spawnMenuWall(container, bx+CS/2, WH/2, bz, CS, WH, WT);
+    if (cell.walls[1]) spawnMenuWall(container, bx+CS,   WH/2, bz-CS/2, WT, WH, CS);
+  }
+  spawnMenuWall(container, 0,       WH/2, WT/2,          COLS*CS, WH, WT);
+  spawnMenuWall(container, 0,       WH/2, -(ROWS*CS)+WT/2, COLS*CS, WH, WT);
+  spawnMenuWall(container, -COLS*CS/2+WT/2, WH/2, -ROWS*CS/2, WT, WH, ROWS*CS);
+  spawnMenuWall(container,  COLS*CS/2-WT/2, WH/2, -ROWS*CS/2, WT, WH, ROWS*CS);
+}
+
+function spawnMenuWall(c, x, y, z, w, h, d) {
+  c.appendChild(mk('a-box',{
+    position:`${x} ${y} ${z}`, width:w, height:h, depth:d,
+    material:'color:#041520;emissive:#002840;emissiveIntensity:0.7;roughness:0.6;metalness:0.3'
+  }));
+}
+
+// ══════════════════════════════════════════════════
+//  PANORÁMICA DEL MENÚ (rotación lenta)
+// ══════════════════════════════════════════════════
+function animateMenuCamera() {
+  if (STATE !== 'menu') return;
+  menuRotAngle += 0.0006;
+  const cam = $('menuCam');
+  if (!cam) return;
+  const r = 16, h = 7 + Math.sin(menuRotAngle*0.5)*2;
+  const x = Math.sin(menuRotAngle) * r;
+  const z = Math.cos(menuRotAngle) * r;
+  cam.setAttribute('position', `${x} ${h} ${z}`);
+  // Apuntar al centro del laberinto demo
+  const mc = $('menuCamera');
+  if (mc) {
+    const dx = -x, dy = -h+1.5, dz = -z;
+    const yaw = Math.atan2(dx, dz) * 180/Math.PI;
+    const pitch = Math.atan2(dy, Math.sqrt(dx*dx+dz*dz)) * 180/Math.PI;
+    mc.setAttribute('rotation', `${pitch} ${yaw} 0`);
+  }
+  requestAnimationFrame(animateMenuCamera);
+}
+
+// ══════════════════════════════════════════════════
+//  MOVIMIENTO JUGADOR + COLISIONES
+// ══════════════════════════════════════════════════
+window.addEventListener('keydown', e => { KEYS[e.key.toLowerCase()] = true; });
+window.addEventListener('keyup',   e => { KEYS[e.key.toLowerCase()] = false; });
+
+function getInput() {
+  let dx=0, dz=0;
+  if (KEYS['w']||KEYS['arrowup'])    dz=-1;
+  if (KEYS['s']||KEYS['arrowdown'])  dz=+1;
+  if (KEYS['a']||KEYS['arrowleft'])  dx=-1;
+  if (KEYS['d']||KEYS['arrowright']) dx=+1;
+  const l = Math.hypot(dx,dz); if(l>0){dx/=l;dz/=l;}
+  return {dx,dz};
+}
+
+function hitWall(x,z) {
+  const R = CFG.playerR;
+  return walls3D.some(b => x+R>b.minX && x-R<b.maxX && z+R>b.minZ && z-R<b.maxZ);
+}
+
+function movePlayer(dt) {
+  if (!gameStarted || won) return;
+  const {dx,dz} = getInput();
+  if (!dx && !dz) return;
+
+  const cam = $('cam');
+  const yaw = ((cam?.components?.['look-controls']?.yawObject?.rotation?.y || 0));
+  const cos = Math.cos(yaw), sin = Math.sin(yaw);
+  const mx = (dx*cos + dz*sin) * CFG.playerSpeed * dt;
+  const mz = (-dx*sin + dz*cos) * CFG.playerSpeed * dt;
+
+  const nx = playerPos.x + mx, nz = playerPos.z + mz;
+  if (!hitWall(nx, nz)) {
+    playerPos.x = nx; playerPos.z = nz;
+  } else if (!hitWall(nx, playerPos.z)) {
+    playerPos.x = nx;
+  } else if (!hitWall(playerPos.x, nz)) {
+    playerPos.z = nz;
+  }
+
+  $('rig').setAttribute('position', `${playerPos.x} 0 ${playerPos.z}`);
+  checkPrize();
+}
+
+function checkPrize() {
+  if (!prizeCell || won) return;
+  const px = prizeCell.c*CFG.cellSize + CFG.cellSize/2;
+  const pz = prizeCell.r*CFG.cellSize + CFG.cellSize/2;
+  if (Math.hypot(playerPos.x-px, playerPos.z-pz) < CFG.prizeR) {
+    won = true; gameStarted = false;
+    $('prize').setAttribute('visible','false');
+    if (ws?.readyState===1) ws.send(JSON.stringify({type:'win',player:playerName}));
+    showWin(playerName);
+  }
+}
+
+// ── GAME LOOP ──
+function loop(t) {
+  if (STATE==='game') {
+    const dt = Math.min((t-lastT)/1000, 0.05);
+    movePlayer(dt);
+  }
+  lastT = t;
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ══════════════════════════════════════════════════
+//  FLUJO DE PANTALLAS
+// ══════════════════════════════════════════════════
+
+// CARGA 1
+const STEPS = [
+  {p:12,m:'Generando laberinto demo...'},
+  {p:30,m:'Construyendo corredores...'},
+  {p:50,m:'Colocando luces...'},
+  {p:68,m:'Preparando VR...'},
+  {p:85,m:'Cargando escena 3D...'},
+  {p:100,m:'¡Listo!'},
+];
+let si=0;
+const LOAD_TOTAL = 7200;
+function loadStep() {
+  if (si >= STEPS.length) {
+    setTimeout(() => {
+      $('loadScreen').classList.add('fade-out');
+      setTimeout(() => { showOnly('vrScreen'); STATE='vr'; startVRCountdown(); }, 600);
+    }, 500);
+    return;
+  }
+  const {p,m} = STEPS[si++];
+  $('pFill').style.width = p+'%';
+  $('pTxt').textContent = m;
+  setTimeout(loadStep, LOAD_TOTAL/STEPS.length);
+}
+setTimeout(loadStep, 400);
+
+// Construir laberinto de menú mientras carga
+setTimeout(() => {
+  buildMenuMaze();
+}, 200);
+
+// CARGA 2
+function startVRCountdown() {
+  let s = 5; $('vrCD').textContent = s;
+  const iv = setInterval(() => {
+    s--;
+    $('vrCD').textContent = Math.max(0,s);
+    $('vrFill').style.width = ((5-s)/5*100)+'%';
+    if (s<=0) { clearInterval(iv); skipVR(); }
+  }, 1000);
+}
+function skipVR() {
+  $('vrScreen').style.opacity='0';
+  $('vrScreen').style.transition='opacity .5s';
+  setTimeout(() => { showMenu(); }, 500);
+}
+
+// MENÚ
+function showMenu() {
+  STATE = 'menu';
+  // Cambiar a cámara del menú
+  $('scene').setAttribute('camera','#menuCamera');
+  $('menuCam').setAttribute('position','0 8 12');
+  $('gameScene').setAttribute('visible','false');
+  $('menuScene3D').setAttribute('visible','true');
+  showOnly('menuScreen');
+  $('menuScreen').style.display = 'flex';
+  animateMenuCamera();
+}
+
+// INICIAR JUEGO
+function launchGame(role='solo') {
+  playerName = $('nameIn').value.trim().toUpperCase() || 'JUGADOR01';
+  localStorage.setItem('lbName', playerName);
+  $('hudName').textContent = playerName;
+  $('winName').textContent = playerName;
+
+  // Generar laberinto de juego
+  maze = genMaze(CFG.mazeCols, CFG.mazeRows);
+  buildGameScene();
+  placePrize();
+
+  // Cambiar a cámara del juego
+  $('menuScene3D').setAttribute('visible','false');
+  $('gameScene').setAttribute('visible','true');
+
+  // Spawn jugador
+  playerPos = { x: CFG.spawnC*CFG.cellSize + CFG.cellSize/2, z: CFG.spawnR*CFG.cellSize + CFG.cellSize/2 };
+  $('rig').setAttribute('position', `${playerPos.x} 0 ${playerPos.z}`);
+
+  won = false; gameStarted = true; STATE = 'game';
+  showOnly('hud');
+  $('hud').style.display = 'block';
+  $('hudStatus').textContent = '🔍 Busca el objeto dorado...';
+
+  if (role !== 'solo') connectWS(role);
+}
+
+function startSolo()   { showOnly(null); launchGame('solo'); }
+function createRoom()  {
+  const code = Array.from({length:6},()=>'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.random()*32|0]).join('');
+  $('codeBox').textContent = code;
+  $('hostInfo').classList.remove('hidden');
+  // Detectar IP local via WebRTC
+  try {
+    const pc = new RTCPeerConnection({iceServers:[]});
+    pc.createDataChannel('');
+    pc.createOffer().then(o=>pc.setLocalDescription(o));
+    pc.onicecandidate = e => {
+      const ip = /(\d+\.\d+\.\d+\.\d+)/.exec(e?.candidate?.candidate)?.[1];
+      if (ip) { $('localIPBox').textContent = ip; pc.close(); }
+    };
+  } catch(e) { $('localIPBox').textContent='127.0.0.1'; }
+  toast('✔ Sala creada — Comparte el código');
+  setTimeout(() => launchGame('host'), 2000);
+}
+function joinByCode()  {
+  const c = $('joinCode').value.trim();
+  if (c.length!==6) { toast('⚠ Código de 6 caracteres'); return; }
+  toast('🔗 Conectando...'); setTimeout(() => launchGame('client'), 800);
+}
+function joinByIP()    {
+  const ip = $('joinIP').value.trim();
+  if (!ip) { toast('⚠ Introduce una IP'); return; }
+  toast(`🌐 Conectando a ${ip}...`); setTimeout(() => launchGame('client'), 800);
+}
+
+// PAUSA / MENÚ
+function togglePause() {
+  if (STATE==='game') {
+    STATE='pause'; gameStarted=false;
+    $('pauseScreen').style.display='flex';
+  } else if (STATE==='pause') {
+    STATE='game'; gameStarted=true;
+    $('pauseScreen').style.display='none';
+  }
+}
+function backToMenu() {
+  gameStarted=false; won=false; STATE='loading';
+  window.location.reload();
+}
+
+// VICTORIA
+function showWin(name) {
+  STATE='win';
+  $('winName').textContent = name;
+  showOnly('winScreen');
+  $('winScreen').style.display='flex';
+}
+
+// ── WebSocket skeleton ──
+function connectWS(role) {
+  const ip = $('joinIP')?.value || '127.0.0.1';
+  const port = $('joinPort')?.value || '3000';
+  try {
+    ws = new WebSocket(`ws://${ip}:${port}`);
+    ws.onopen = () => { ws.send(JSON.stringify({type:'join',player:playerName,role})); };
+    ws.onmessage = e => {
+      let m; try{m=JSON.parse(e.data)}catch{return}
+      if (m.type==='win' && m.player!==playerName) showWin(m.player);
+      if (m.type==='player_join') toast(`👤 ${m.player} entró`);
+      if (m.type==='player_leave') toast(`👤 ${m.player} salió`);
+    };
+    ws.onerror = () => toast('⚠ Sin servidor — modo local');
+  } catch(e) { toast('⚠ Sin servidor — modo local'); }
+}
+setInterval(() => {
+  if (ws?.readyState===1 && STATE==='game') {
+    ws.send(JSON.stringify({type:'move',player:playerName,
+      position:{x:playerPos.x,y:0,z:playerPos.z}}));
+  }
+}, 100);
+
+// ── CARGAR NOMBRE GUARDADO ──
+const sn = localStorage.getItem('lbName');
+if (sn) { $('nameIn').value=sn; $('nameCnt').textContent=sn.length; }
+</script>
+</body>
+</html>
