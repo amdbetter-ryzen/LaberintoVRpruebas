@@ -307,6 +307,23 @@ a-scene{position:fixed;inset:0;z-index:0}
 
 <script>
 /* Billboard component — keeps labels facing camera */
+AFRAME.registerComponent('tint',{
+  schema:{color:{default:'#ffffff'}},
+  init:function(){
+    var col=this.data.color,self=this;
+    function apply(){
+      self.el.object3D.traverse(function(o){
+        if(!o.isMesh)return;
+        var c=new THREE.Color(col);
+        [].concat(o.material||[]).forEach(function(m){
+          m.emissive=c;m.emissiveIntensity=0.38;m.needsUpdate=true;
+        });
+      });
+    }
+    if(this.el.getObject3D('mesh'))apply();
+    else this.el.addEventListener('model-loaded',apply);
+  }
+});
 AFRAME.registerComponent('billboard',{
   tick:function(){
     var cam=document.querySelector('[camera]');
@@ -327,7 +344,16 @@ AFRAME.registerComponent('billboard',{
   loading-screen="enabled:false"
   fog="type:exponential;color:#050402;density:.045">
 
-  <a-assets id="aAssets" timeout="15000"></a-assets>
+  <a-assets id="aAssets" timeout="20000">
+    <a-asset-item id="mdlCaja1"   src="caja1.glb"></a-asset-item>
+    <a-asset-item id="mdlCaja2"   src="caja2.glb"></a-asset-item>
+    <a-asset-item id="mdlCaja3"   src="caja3.glb"></a-asset-item>
+    <a-asset-item id="mdlMusgo1"  src="musgo1.glb"></a-asset-item>
+    <a-asset-item id="mdlMusgo2"  src="musgo2.glb"></a-asset-item>
+    <a-asset-item id="mdlMusgo3"  src="musgo3.glb"></a-asset-item>
+    <a-asset-item id="mdlAntorcha" src="antorcha.glb"></a-asset-item>
+    <a-asset-item id="mdlOjobot"  src="ojobot.glb"></a-asset-item>
+  </a-assets>
 
   <!-- MENU SCENE -->
   <a-entity id="menuScene" visible="true">
@@ -505,8 +531,28 @@ AFRAME.registerComponent('billboard',{
       </div>
 
       <div class="sub" id="mSettings">
-        <div class="sec-lbl">Cuenta</div>
-        <div class="s-item"><div class="s-item-head" style="margin-bottom:6px"><span class="s-item-label">Nombre</span></div><div class="name-wrap"><input class="name-in" id="nameIn" type="text" maxlength="16" placeholder="JUGADOR01" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9_]/g,'');syncName(this.value)"/></div></div>
+
+        <div class="sec-lbl">Perfil de jugador</div>
+        <div class="s-item" style="gap:10px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div id="settingsAvatar" style="width:38px;height:38px;border-radius:50%;background:var(--c0a);border:2px solid var(--c0);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0">&#x1F916;</div>
+            <div style="flex:1">
+              <div class="s-item-label" style="margin-bottom:4px">Nombre de jugador</div>
+              <div class="name-wrap"><input class="name-in" id="nameIn" type="text" maxlength="16" placeholder="JUGADOR01" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9_]/g,'');syncName(this.value)"/></div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;font-family:var(--fm);font-size:.58rem;color:var(--tx3)">
+            <div style="flex:1;background:var(--bg3);border-radius:8px;padding:7px 10px;text-align:center">
+              <div style="font-family:var(--fn);font-size:.9rem;font-weight:700;color:var(--c2)" id="statWins">0</div>
+              <div>Victorias</div>
+            </div>
+            <div style="flex:1;background:var(--bg3);border-radius:8px;padding:7px 10px;text-align:center">
+              <div style="font-family:var(--fn);font-size:.9rem;font-weight:700;color:var(--c0)" id="statCosmetics">0</div>
+              <div>Cosm&eacute;ticos</div>
+            </div>
+          </div>
+        </div>
+
         <div class="sec-lbl">Audio</div>
         <div class="s-item">
           <div class="s-item-head"><span class="s-item-label">M&uacute;sica men&uacute;</span></div>
@@ -522,6 +568,7 @@ AFRAME.registerComponent('billboard',{
             <button class="t-btn" id="sfxOff" onclick="setSfxBtn(false)">Silencio</button>
           </div>
         </div>
+
         <div class="sec-lbl">Gr&aacute;ficos</div>
         <div class="s-item">
           <div class="s-item-head"><span class="s-item-label">Niebla</span></div>
@@ -530,17 +577,46 @@ AFRAME.registerComponent('billboard',{
             <button class="t-btn" onclick="tE('fogRow',this);setFog(false)">Desactivada</button>
           </div>
         </div>
-        <div class="sec-lbl">Controles (PC)</div>
+        <div class="s-item">
+          <div class="s-item-head"><span class="s-item-label">Efecto VHS</span></div>
+          <div class="t-row" id="vhsRow">
+            <button class="t-btn on" id="vhsOnBtn" onclick="tE('vhsRow',this);setVHSEnabled(true)">Activado</button>
+            <button class="t-btn" id="vhsOffBtn" onclick="tE('vhsRow',this);setVHSEnabled(false)">Desactivado</button>
+          </div>
+        </div>
+
+        <div class="sec-lbl">Movimiento</div>
+        <div class="s-item">
+          <div class="s-item-head"><span class="s-item-label">Velocidad</span><span class="s-item-val" id="sSpeedV">5</span></div>
+          <input type="range" class="s-rng" id="sSpeedSlider" min="2" max="9" value="5"
+            oninput="sRng(this);CFG.speed=+this.value;document.getElementById('sSpeedV').textContent=this.value;localStorage.setItem('lbSpeed',this.value)"/>
+        </div>
+        <div class="s-item">
+          <div class="s-item-head"><span class="s-item-label">Sensibilidad c&aacute;mara</span><span class="s-item-val" id="sSpV">5</span></div>
+          <input type="range" class="s-rng" id="sSpeed" min="1" max="10" value="5"
+            oninput="sRng(this);CFG.mouseSens=+this.value;document.getElementById('sSpV').textContent=this.value;localStorage.setItem('lbSens',this.value)"/>
+        </div>
+
+        <div class="sec-lbl">Controles</div>
         <div class="s-item" id="ctrlDesktop">
           <span class="s-item-label">Teclado y rat&oacute;n</span>
-          <div class="ctrl-desc"><span class="ctrl-key">WASD</span> Mover &nbsp; <span class="ctrl-key">RAT&Oacute;N</span> Mirar &nbsp; <span class="ctrl-key">P</span> Pausa<br><span class="ctrl-key">CLIC</span> Capturar cursor &nbsp; <span class="ctrl-key">ESC</span> Soltar</div>
+          <div class="ctrl-desc"><span class="ctrl-key">WASD</span> Mover &nbsp;<span class="ctrl-key">RAT&Oacute;N</span> Mirar &nbsp;<span class="ctrl-key">P</span> Pausa<br><span class="ctrl-key">CLIC</span> Capturar &nbsp;<span class="ctrl-key">ESC</span> Soltar</div>
         </div>
         <div class="s-item" id="ctrlMobile" style="display:none">
           <span class="s-item-label">T&aacute;ctil / M&oacute;vil</span>
-          <div class="ctrl-desc"><span class="ctrl-key" style="color:var(--c2)">JOYSTICK</span> Mover &nbsp; <span class="ctrl-key" style="color:var(--c2)">ARRASTRA</span> Mirar</div>
+          <div class="ctrl-desc"><span class="ctrl-key" style="color:var(--c2)">JOYSTICK</span> Mover &nbsp;<span class="ctrl-key" style="color:var(--c2)">ARRASTRA</span> Mirar</div>
         </div>
-        <div class="sec-lbl">C&aacute;mara (PC)</div>
-        <div class="s-item"><div class="s-item-head"><span class="s-item-label">Sensibilidad</span><span class="s-item-val" id="sSpV">5</span></div><input type="range" class="s-rng" id="sSpeed" min="1" max="10" value="5" oninput="sRng(this);CFG.mouseSens=+this.value;document.getElementById('sSpV').textContent=this.value"/></div>
+
+        <div class="sec-lbl">Datos locales</div>
+        <div class="s-item">
+          <span class="s-item-label">Progreso guardado localmente en tu dispositivo</span>
+          <div style="display:flex;gap:8px;margin-top:6px">
+            <button class="btn-ghost" style="flex:1;font-size:.6rem;padding:8px" onclick="exportProfile()">Exportar</button>
+            <button class="btn-ghost" style="flex:1;font-size:.6rem;padding:8px" onclick="importProfile()">Importar</button>
+            <button class="btn-ghost" style="flex:1;font-size:.6rem;padding:8px;color:var(--c1);border-color:rgba(255,51,85,.3)" onclick="confirmResetStats()">Reiniciar</button>
+          </div>
+        </div>
+
         <div class="f-nav"><button class="lnk-back" onclick="goSub('mMain')">Volver</button></div>
       </div>
 
@@ -1207,33 +1283,39 @@ function buildDecorations(cb){
     dec.appendChild(mk('a-entity',{light:'type:point;color:#ff7700;intensity:1.8;distance:4.5;decay:2.8',position:ttx+' '+(tty+0.18)+' '+ttz}));
   }
 
-  /* Crates — single boxes only (no stacking) */
+  /* CRATES — use GLB models, 3 types by zone */
+  var crateModels=['mdlCaja1','mdlCaja2','mdlCaja3'];
   var crateNodes=[];
-  for(var cr=1;cr<MR-1;cr+=4)for(var cc=1;cc<MC-1;cc+=4)
-    if(G[cr][cc]&&(cr>11||cc>11)&&_prng01()<0.10)crateNodes.push({r:cr,c:cc});
+  for(var cr=1;cr<MR-1;cr+=4)for(var cc=1;cc<MC-1;cc+=4){
+    var openN=0,nb4=[[0,1],[0,-1],[1,0],[-1,0]];
+    for(var nbi=0;nbi<4;nbi++){var nr2=cr+nb4[nbi][0],nc2=cc+nb4[nbi][1];if(nr2>=0&&nr2<MR&&nc2>=0&&nc2<MC&&G[nr2][nc2])openN++;}
+    if(G[cr][cc]&&(cr>11||cc>11)&&openN>=2&&_prng01()<0.10)crateNodes.push({r:cr,c:cc,band:Math.min(2,Math.floor(cc/(MC/3)))});
+  }
   crateNodes.slice(0,Math.min(crateNodes.length,18)).forEach(function(nd){
     var cp=wp(nd.r,nd.c);
-    var ox=(_prng01()-.5)*CELL*0.3,oz=(_prng01()-.5)*CELL*0.3;
-    var sz=(0.32+_prng01()*0.18).toFixed(2);
-    // No collision for crates (decorative)
-    dec.appendChild(mk('a-box',{width:sz,height:sz,depth:sz,
-      position:(cp.x+ox).toFixed(2)+' '+(+sz/2)+' '+(cp.z+oz).toFixed(2),
-      material:'src:#texWall2;repeat:1 1;roughness:.88;metalness:.08'}));
+    var ox=(_prng01()-.5)*CELL*0.22,oz=(_prng01()-.5)*CELL*0.22;
+    var mdlId=crateModels[nd.band];
+    var ent=mk('a-entity',{position:(cp.x+ox).toFixed(2)+' 0 '+(cp.z+oz).toFixed(2)});
+    var mdl=document.createElement('a-gltf-model');
+    mdl.setAttribute('src','#'+mdlId);
+    mdl.setAttribute('scale','0.5 0.5 0.5');
+    ent.appendChild(mdl);
+    dec.appendChild(ent);
   });
 
-  /* Moss patches — flat, no collision, random floor cells */
-  var mossCount=0,maxMoss=Math.min(50,MR*MC/30|0);
-  for(var mr2=3;mr2<MR-3&&mossCount<maxMoss;mr2++)for(var mc2=3;mc2<MC-3&&mossCount<maxMoss;mc2++){
-    if(G[mr2][mc2]&&_prng01()<0.04){
+  /* MOSS — use GLB models, flat on floor, no collision */
+  var mossModels=['mdlMusgo1','mdlMusgo2','mdlMusgo3'];
+  var mossCount=0,maxMoss=Math.min(40,MR*MC/40|0);
+  for(var mr2=3;mr2<MR-3&&mossCount<maxMoss;mr2+=2)for(var mc2=3;mc2<MC-3&&mossCount<maxMoss;mc2+=2){
+    if(G[mr2][mc2]&&_prng01()<0.06){
       var mp=wp(mr2,mc2);
-      var mw=(0.4+_prng01()*0.7).toFixed(2);
-      var mh=(0.3+_prng01()*0.5).toFixed(2);
-      var mAlpha=(_prng01()*0.45+0.25).toFixed(2);
-      var mEnt=mk('a-plane',{
-        width:mw,height:mh,rotation:'-90 0 '+(Math.floor(_prng01()*4)*90),
-        position:mp.x.toFixed(2)+' 0.005 '+mp.z.toFixed(2),
-        material:'color:#2a5c14;emissive:#1a3a0a;emissiveIntensity:0.3;transparent:true;opacity:'+mAlpha+';roughness:.98;side:double'
-      });
+      var mox=(_prng01()-.5)*CELL*0.4,moz=(_prng01()-.5)*CELL*0.4;
+      var mEnt=mk('a-entity',{position:(mp.x+mox).toFixed(2)+' 0 '+(mp.z+moz).toFixed(2),
+        rotation:'0 '+(Math.floor(_prng01()*4)*90)+' 0'});
+      var mMdl=document.createElement('a-gltf-model');
+      mMdl.setAttribute('src','#'+mossModels[mossCount%3]);
+      mMdl.setAttribute('scale','0.5 0.5 0.5');
+      mEnt.appendChild(mMdl);
       moss.appendChild(mEnt);
       mossCount++;
     }
@@ -1923,69 +2005,102 @@ function makePlayerBot(id,col,name,hatId,trailId){
   var e=document.createElement('a-entity');
   e.id='plr_'+id;
 
-  // Floating animation root
+  // Root: floats up/down + slow spin (Fallout Eyebot style)
   var floatEnt=document.createElement('a-entity');
-  floatEnt.setAttribute('animation__f','property:position;from:0 0 0;to:0 0.12 0;loop:true;dir:alternate;dur:1400;easing:easeInOutSine');
+  var hDur=2000+Math.floor(Math.random()*600);
+  floatEnt.setAttribute('animation__f','property:position;from:0 1.55 0;to:0 1.72 0;loop:true;dir:alternate;dur:'+hDur+';easing:easeInOutSine');
+  floatEnt.setAttribute('animation__sw','property:rotation;from:0 0 -2.5;to:0 0 2.5;loop:true;dir:alternate;dur:'+(hDur*1.3|0)+';easing:easeInOutSine');
+  floatEnt.setAttribute('animation__sp','property:rotation;from:0 0 0;to:0 360 0;loop:true;dur:9000;easing:linear');
 
-  // BODY — small sphere (head is the body for bots)
-  var body=mk('a-sphere',{radius:'0.16',material:'color:#0e1a24;emissive:'+col+';emissiveIntensity:.5;roughness:.4;metalness:.3'});
-  body.setAttribute('position','0 0 0');
+  // BODY — use ojobot.glb if loaded, else geometry
+  var body=document.createElement('a-entity');
+  var mdlEl=document.createElement('a-gltf-model');
+  mdlEl.setAttribute('src','#mdlOjobot');
+  mdlEl.setAttribute('scale','0.26 0.26 0.26');
+  mdlEl.setAttribute('tint','color:'+col);
+  body.appendChild(mdlEl);
 
-  // Visor stripe
-  var visor=mk('a-box',{width:'0.28',height:'0.07',depth:'0.17',
-    material:'color:'+col+';emissive:'+col+';emissiveIntensity:3;transparent:true;opacity:.85;roughness:.1;metalness:.5'});
-  visor.setAttribute('position','0 0.025 0.08');
+  // Fallback geometry (always visible, mdl overlays it)
+  var sphere=mk('a-sphere',{radius:'0.16',material:'color:#0a1218;emissive:'+col+';emissiveIntensity:.35;roughness:.3;metalness:.4;transparent:true;opacity:.6'});
+  body.appendChild(sphere);
+
+  // Visor glow stripe (always shown)
+  var visor=mk('a-box',{width:'0.26',height:'0.06',depth:'0.18',position:'0 0.02 0.09',
+    material:'color:'+col+';emissive:'+col+';emissiveIntensity:3.5;transparent:true;opacity:.88;roughness:.05;metalness:.6'});
   body.appendChild(visor);
 
-  // Eye light
-  var eye=mk('a-entity',{light:'type:point;color:'+col+';intensity:.5;distance:1.5;decay:3'});
-  eye.setAttribute('position','0 0.025 0.1');
-  body.appendChild(eye);
-
-  // Tiny thruster pods (left+right)
+  // Thruster pods
   [-1,1].forEach(function(side){
-    var pod=mk('a-cylinder',{radius:'0.045',height:'0.1',rotation:'0 0 90',
-      material:'color:#1a2a3a;emissive:'+col+';emissiveIntensity:.3;roughness:.5;metalness:.4'});
-    pod.setAttribute('position',(side*0.22)+' -0.04 0');
+    var pod=mk('a-cylinder',{radius:'0.04',height:'0.09',rotation:'0 0 90',position:(side*0.2)+' -0.04 0',
+      material:'color:#1a2a3a;emissive:'+col+';emissiveIntensity:.4;roughness:.5;metalness:.5'});
     body.appendChild(pod);
-    var thrust=mk('a-sphere',{radius:'0.038',position:(side*0.22)+' -0.1 0',
-      material:'color:'+col+';emissive:'+col+';emissiveIntensity:4;transparent:true;opacity:.7'});
-    thrust.setAttribute('animation','property:scale;from:1 1 1;to:0.6 0.6 0.6;loop:true;dir:alternate;dur:'+(180+Math.floor(Math.random()*120)));
+    var thrust=mk('a-sphere',{radius:'0.034',position:(side*0.2)+' -0.1 0',
+      material:'color:'+col+';emissive:'+col+';emissiveIntensity:5;transparent:true;opacity:.75'});
+    thrust.setAttribute('animation','property:scale;from:1 1 1;to:0.55 0.55 0.55;loop:true;dir:alternate;dur:'+(160+Math.floor(Math.random()*100)));
     body.appendChild(thrust);
   });
 
+  // Aura ring (colour-coded, subtle)
+  var auraRing=mk('a-ring',{'radius-inner':'0.2','radius-outer':'0.3',rotation:'90 0 0',position:'0 -0.1 0',
+    material:'color:'+col+';emissive:'+col+';emissiveIntensity:1.4;transparent:true;opacity:.5;side:double'});
+  auraRing.setAttribute('animation__ap','property:material.opacity;from:.3;to:.65;loop:true;dir:alternate;dur:'+(900+Math.floor(Math.random()*300)));
+  auraRing.setAttribute('animation__as','property:scale;from:1 1 1;to:1.2 1.2 1;loop:true;dir:alternate;dur:'+(1100+Math.floor(Math.random()*300)));
+  body.appendChild(auraRing);
+
+  // Point light (colour per player)
+  body.appendChild(mk('a-entity',{light:'type:point;color:'+col+';intensity:.7;distance:3;decay:2.5',position:'0 0 0'}));
+
   floatEnt.appendChild(body);
 
-  // Hat on top
+  // HAT (sits above the bot)
   if(hatId&&hatId!=='none'){
-    var hTop=mk('a-entity',{position:'0 0.2 0'});
-    if(hatId==='hat_basic'){hTop.appendChild(mk('a-cone',{'radius-bottom':'0.1','radius-top':'0.01',height:'0.14',material:'color:#8B5A2B;roughness:.6'}));}
-    else if(hatId==='hat_wizard'){
-      hTop.appendChild(mk('a-cone',{'radius-bottom':'0.1','radius-top':'0.01',height:'0.18',material:'color:#6b21a8;emissive:#7c3aed;emissiveIntensity:.4;roughness:.5'}));
-      hTop.appendChild(mk('a-torus',{'radius':'0.12','radius-tubular':'0.02',material:'color:#9333ea;emissive:#7c3aed;emissiveIntensity:.5'}));
+    var hTop=mk('a-entity',{position:'0 0.22 0'});
+    if(hatId==='hat_basic'){
+      hTop.appendChild(mk('a-cone',{'radius-bottom':'0.1','radius-top':'0.008',height:'0.15',
+        material:'color:#8B5A2B;roughness:.7;metalness:.1'}));
+      // brim
+      hTop.appendChild(mk('a-cylinder',{radius:'0.13',height:'0.02',position:'0 -0.06 0',
+        material:'color:#6b3e1c;roughness:.7'}));
+    } else if(hatId==='hat_wizard'){
+      hTop.appendChild(mk('a-cone',{'radius-bottom':'0.1','radius-top':'0.004',height:'0.2',
+        material:'color:#5b1ea8;emissive:#7c3aed;emissiveIntensity:.5;roughness:.4'}));
+      hTop.appendChild(mk('a-torus',{'radius':'0.13','radius-tubular':'0.018',
+        material:'color:#9333ea;emissive:#7c3aed;emissiveIntensity:.6;roughness:.3'}));
+      // star
+      hTop.appendChild(mk('a-sphere',{radius:'0.022',position:'0 0.21 0',
+        material:'color:#ffe066;emissive:#ffcc00;emissiveIntensity:3'}));
+    } else if(hatId==='hat_crown'){
+      hTop.appendChild(mk('a-torus',{'radius':'0.11','radius-tubular':'0.032',
+        material:'color:#ffd700;emissive:#ffaa00;emissiveIntensity:.8;metalness:.85;roughness:.15'}));
+      for(var sp2=0;sp2<5;sp2++){
+        var ang2=sp2/5*Math.PI*2;
+        hTop.appendChild(mk('a-cone',{'radius-bottom':'0.018','radius-top':'0.003',height:'0.07',
+          position:(Math.cos(ang2)*0.09).toFixed(3)+' 0.04 '+(Math.sin(ang2)*0.09).toFixed(3),
+          material:'color:#ffd700;emissive:#ffcc00;emissiveIntensity:.9;metalness:.8;roughness:.15'}));
+      }
     }
-    else if(hatId==='hat_crown'){hTop.appendChild(mk('a-torus',{'radius':'0.1','radius-tubular':'0.022',material:'color:#ffd700;emissive:#ffaa00;emissiveIntensity:.7;metalness:.8;roughness:.2'}));}
     floatEnt.appendChild(hTop);
   }
 
-  // Aura
+  // COSMETIC AURA (trail type)
   if(trailId&&trailId!=='none'){
     var aColors={aura_cyan:'#00e5ff',aura_fire:'#ff6600',aura_star:'#ffdd44'};
     var ac=aColors[trailId]||col;
-    var aura=mk('a-sphere',{radius:'0.28',material:'color:'+ac+';emissive:'+ac+';emissiveIntensity:1;transparent:true;opacity:.07;side:double'});
-    aura.setAttribute('animation','property:scale;from:1 1 1;to:1.2 1.2 1.2;loop:true;dir:alternate;dur:1000;easing:easeInOutSine');
-    floatEnt.appendChild(aura);
-    floatEnt.appendChild(mk('a-entity',{light:'type:point;color:'+ac+';intensity:.4;distance:2;decay:3'}));
+    var auraOrb=mk('a-sphere',{radius:'0.3',material:'color:'+ac+';emissive:'+ac+';emissiveIntensity:1.2;transparent:true;opacity:.06;side:double'});
+    auraOrb.setAttribute('animation','property:scale;from:1 1 1;to:1.18 1.18 1.18;loop:true;dir:alternate;dur:1100;easing:easeInOutSine');
+    floatEnt.appendChild(auraOrb);
+    floatEnt.appendChild(mk('a-entity',{light:'type:point;color:'+ac+';intensity:.5;distance:2.5;decay:2.5'}));
   }
 
-  // Glow
-  floatEnt.appendChild(mk('a-entity',{light:'type:point;color:'+col+';intensity:.3;distance:2;decay:3.5'}));
-
-  // Nametag
-  var ntag=mk('a-entity',{position:'0 0.35 0'});
+  // NAMETAG — always faces camera
+  var ntag=mk('a-entity',{position:'0 0.38 0'});
   ntag.setAttribute('billboard','');
-  ntag.appendChild(mk('a-plane',{width:'0.75',height:'0.18',material:'color:#050709;transparent:true;opacity:.7;side:double'}));
-  ntag.appendChild(mk('a-text',{value:name,align:'center',position:'0 0 0.01',color:col,width:'2.2',font:'https://cdn.aframe.io/fonts/Exo2Bold.fnt'}));
+  var nbg=mk('a-plane',{width:'0.82',height:'0.2',material:'color:#020408;transparent:true;opacity:.78;side:double'});
+  ntag.appendChild(nbg);
+  var nbar=mk('a-plane',{width:'0.82',height:'0.04',position:'0 -0.08 0.001',
+    material:'color:'+col+';emissive:'+col+';emissiveIntensity:1.5;transparent:true;opacity:.9;side:double'});
+  ntag.appendChild(nbar);
+  ntag.appendChild(mk('a-text',{value:name,align:'center',position:'0 0.01 0.002',color:col,width:'3',font:'https://cdn.aframe.io/fonts/Exo2Bold.fnt'}));
   floatEnt.appendChild(ntag);
 
   e.appendChild(floatEnt);
@@ -2002,7 +2117,7 @@ function updateOther(id,p){
     _others[id]=botEnt;
   }
   _othersPos[id]=p;
-  _others[id].setAttribute('position',p.x+' 1.0 '+p.z);
+  _others[id].setAttribute('position',p.x+' 0 '+p.z);
 }
 function removeOther(id){
   if(_others[id]){if(_others[id].parentNode)_others[id].parentNode.removeChild(_others[id]);delete _others[id];delete _othersPos[id];}
@@ -2177,6 +2292,119 @@ function checkAdminCode(){
   }
 }
 $('adminCodeIn').addEventListener('keydown',function(e){if(e.key==='Enter')checkAdminCode();});
+
+/* ── SETTINGS HELPERS ─────────────────────────────── */
+(function initSettings(){
+  // Load saved speed/sens
+  var savedSpeed=localStorage.getItem('lbSpeed');
+  var savedSens=localStorage.getItem('lbSens');
+  if(savedSpeed){
+    CFG.speed=+savedSpeed;
+    var sl=document.getElementById('sSpeedSlider');
+    var sv=document.getElementById('sSpeedV');
+    if(sl){sl.value=savedSpeed;sRng(sl);}
+    if(sv)sv.textContent=savedSpeed;
+  }
+  if(savedSens){
+    CFG.mouseSens=+savedSens;
+    var sl2=document.getElementById('sSpeed');
+    var sv2=document.getElementById('sSpV');
+    if(sl2){sl2.value=savedSens;sRng(sl2);}
+    if(sv2)sv2.textContent=savedSens;
+  }
+})();
+
+function setVHSEnabled(on){
+  localStorage.setItem('lbVHS',on?'1':'0');
+  var scanline=document.getElementById('vhs-scanline');
+  var scan=document.getElementById('vhs-scan');
+  if(scanline)scanline.style.display=on?'block':'none';
+  if(scan)scan.style.display=on?'block':'none';
+}
+// Apply VHS preference on load
+(function(){
+  var vhsPref=localStorage.getItem('lbVHS');
+  if(vhsPref==='0'){
+    setVHSEnabled(false);
+    var b1=document.getElementById('vhsOnBtn');var b2=document.getElementById('vhsOffBtn');
+    if(b1)b1.classList.remove('on');if(b2)b2.classList.add('on');
+  }
+})();
+
+function updateSettingsStats(){
+  var w=document.getElementById('statWins');
+  var c=document.getElementById('statCosmetics');
+  if(w)w.textContent=_wins;
+  if(c){
+    var count=0;
+    if(localStorage.getItem('lbHat')&&localStorage.getItem('lbHat')!=='none')count++;
+    if(localStorage.getItem('lbTrail')&&localStorage.getItem('lbTrail')!=='none')count++;
+    c.textContent=count;
+  }
+}
+
+// Call updateSettingsStats when entering settings
+var _origGoSub=goSub;
+goSub=function(id){
+  _origGoSub(id);
+  if(id==='mSettings')updateSettingsStats();
+};
+
+function exportProfile(){
+  var data={
+    name:playerName,
+    wins:_wins,
+    hat:localStorage.getItem('lbHat')||'none',
+    trail:localStorage.getItem('lbTrail')||'none',
+    speed:localStorage.getItem('lbSpeed')||'5',
+    sens:localStorage.getItem('lbSens')||'5',
+    lb:localStorage.getItem('lbEntries')||'[]'
+  };
+  var blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='labyrinth_profile_'+playerName+'.json';
+  a.click();
+  toast('Perfil exportado como JSON');
+}
+function importProfile(){
+  var inp=document.createElement('input');
+  inp.type='file';inp.accept='.json';
+  inp.onchange=function(e){
+    var file=e.target.files[0];if(!file)return;
+    var reader=new FileReader();
+    reader.onload=function(ev){
+      try{
+        var data=JSON.parse(ev.target.result);
+        if(data.name)syncName(data.name.toUpperCase().replace(/[^A-Z0-9_]/g,'').slice(0,16)||playerName);
+        if(typeof data.wins==='number'){_wins=data.wins;localStorage.setItem('lbWins',_wins);}
+        if(data.hat){_equippedHat=data.hat;localStorage.setItem('lbHat',data.hat);}
+        if(data.trail){_equippedTrail=data.trail;localStorage.setItem('lbTrail',data.trail);}
+        if(data.speed){localStorage.setItem('lbSpeed',data.speed);CFG.speed=+data.speed;}
+        if(data.sens){localStorage.setItem('lbSens',data.sens);CFG.mouseSens=+data.sens;}
+        if(data.lb)localStorage.setItem('lbEntries',data.lb);
+        toast('Perfil importado correctamente');
+        updateSettingsStats();
+      }catch(e2){toast('Error al importar: archivo no válido',5000);}
+    };
+    reader.readAsText(file);
+  };
+  inp.click();
+}
+function confirmResetStats(){
+  if(confirm('¿Seguro? Esto eliminará tus victorias y cosméticos equipados.')){
+    _wins=0;localStorage.setItem('lbWins',0);
+    _equippedHat='none';_equippedTrail='none';
+    localStorage.removeItem('lbHat');localStorage.removeItem('lbTrail');
+    localStorage.removeItem('lbEntries');
+    toast('Datos reiniciados');
+    updateSettingsStats();
+  }
+}
+
+/* ── applyLocalCosmetics: call on game start ───────── */
+var _origApply=typeof applyLocalCosmetics==='function'?applyLocalCosmetics:null;
+
 </script>
 </body>
 </html>
